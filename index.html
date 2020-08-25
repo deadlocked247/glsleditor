@@ -11,7 +11,581 @@
   }
   </style>
   <script>
-    const shaders = [{name: 'Line', code: `#ifdef GL_ES
+    const shaders = [{name: 'Color mixing example', code:`#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform vec2 u_resolution;
+uniform float u_time;
+
+vec3 colorA = vec3(0.149,0.141,0.912);
+vec3 colorB = vec3(1.000,0.833,0.224);
+
+void main() {
+    vec3 color = vec3(0.0);
+
+    float pct = abs(sin(u_time));
+
+    // Mix uses pct (a value from 0-1) to
+    // mix the two colors
+    color = mix(colorA, colorB, pct);
+
+    gl_FragColor = vec4(color,1.0);
+}
+`}, {name: 'Fractal brownian motion', code: `// Author @patriciogv - 2015
+// http://patriciogonzalezvivo.com
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+
+float random (in vec2 st) {
+    return fract(sin(dot(st.xy,
+                         vec2(12.9898,78.233)))*
+        43758.5453123);
+}
+
+// Based on Morgan McGuire @morgan3d
+// https://www.shadertoy.com/view/4dS3Wd
+float noise (in vec2 st) {
+    vec2 i = floor(st);
+    vec2 f = fract(st);
+
+    // Four corners in 2D of a tile
+    float a = random(i);
+    float b = random(i + vec2(1.0, 0.0));
+    float c = random(i + vec2(0.0, 1.0));
+    float d = random(i + vec2(1.0, 1.0));
+
+    vec2 u = f * f * (3.0 - 2.0 * f);
+
+    return mix(a, b, u.x) +
+            (c - a)* u.y * (1.0 - u.x) +
+            (d - b) * u.x * u.y;
+}
+
+#define OCTAVES 6
+float fbm (in vec2 st) {
+    // Initial values
+    float value = 0.0;
+    float amplitude = .5;
+    float frequency = 0.;
+    //
+    // Loop of octaves
+    for (int i = 0; i < OCTAVES; i++) {
+        value += amplitude * noise(st);
+        st *= 2.;
+        amplitude *= .5;
+    }
+    return value;
+}
+
+void main() {
+    vec2 st = gl_FragCoord.xy/u_resolution.xy;
+    st.x *= u_resolution.x/u_resolution.y;
+
+    vec3 color = vec3(0.0);
+    color += fbm(st*3.0);
+
+    gl_FragColor = vec4(color,1.0);
+}`}, {name: 'Fractal brownian motion example', code:`// Author @patriciogv - 2015
+// http://patriciogonzalezvivo.com
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+
+float random (in vec2 _st) {
+    return fract(sin(dot(_st.xy,
+                         vec2(12.9898,78.233)))*
+        43758.5453123);
+}
+
+// Based on Morgan McGuire @morgan3d
+// https://www.shadertoy.com/view/4dS3Wd
+float noise (in vec2 _st) {
+    vec2 i = floor(_st);
+    vec2 f = fract(_st);
+
+    // Four corners in 2D of a tile
+    float a = random(i);
+    float b = random(i + vec2(1.0, 0.0));
+    float c = random(i + vec2(0.0, 1.0));
+    float d = random(i + vec2(1.0, 1.0));
+
+    vec2 u = f * f * (3.0 - 2.0 * f);
+
+    return mix(a, b, u.x) +
+            (c - a)* u.y * (1.0 - u.x) +
+            (d - b) * u.x * u.y;
+}
+
+#define NUM_OCTAVES 5
+
+float fbm ( in vec2 _st) {
+    float v = 0.0;
+    float a = 0.5;
+    vec2 shift = vec2(100.0);
+    // Rotate to reduce axial bias
+    mat2 rot = mat2(cos(0.5), sin(0.5),
+                    -sin(0.5), cos(0.50));
+    for (int i = 0; i < NUM_OCTAVES; ++i) {
+        v += a * noise(_st);
+        _st = rot * _st * 2.0 + shift;
+        a *= 0.5;
+    }
+    return v;
+}
+
+void main() {
+    vec2 st = gl_FragCoord.xy/u_resolution.xy*3.;
+    // st += st * abs(sin(u_time*0.1)*3.0);
+    vec3 color = vec3(0.0);
+
+    vec2 q = vec2(0.);
+    q.x = fbm( st + 0.00*u_time);
+    q.y = fbm( st + vec2(1.0));
+
+    vec2 r = vec2(0.);
+    r.x = fbm( st + 1.0*q + vec2(1.7,9.2)+ 0.15*u_time );
+    r.y = fbm( st + 1.0*q + vec2(8.3,2.8)+ 0.126*u_time);
+
+    float f = fbm(st+r);
+
+    color = mix(vec3(0.101961,0.619608,0.666667),
+                vec3(0.666667,0.666667,0.498039),
+                clamp((f*f)*4.0,0.0,1.0));
+
+    color = mix(color,
+                vec3(0,0,0.164706),
+                clamp(length(q),0.0,1.0));
+
+    color = mix(color,
+                vec3(0.666667,1,1),
+                clamp(length(r.x),0.0,1.0));
+
+    gl_FragColor = vec4((f*f*f+.6*f*f+.5*f)*color,1.);
+}
+`}, {name: 'Simplex noise example', code: `// Author @deadlocked_d - 2020 
+    // https://codepen.io/deadlocked247/pen/yLNqOKL
+
+    #ifdef GL_ES
+    precision mediump float;
+    #endif
+    uniform vec2 u_resolution;
+    uniform float u_time;
+  
+    const int octaves = 8;
+    const float seed = 43758.5453123;
+    const float seed2 = 73156.8473192;
+  
+    float random(float val) {
+      return fract(sin(val) * seed);
+    }
+  
+    vec2 random2(vec2 st, float seed){
+        st = vec2( dot(st,vec2(127.1,311.7)),
+                  dot(st,vec2(269.5,183.3)) );
+        return -1.0 + 2.0*fract(sin(st)*seed);
+    }
+  
+    float random2d(vec2 uv) {
+      return fract(
+                sin(
+                  dot( uv.xy, vec2(12.9898, 78.233) )
+                ) * seed);
+    }
+  
+    // Value Noise by Inigo Quilez - iq/2013
+    // https://www.shadertoy.com/view/lsf3WH
+    float noise(vec2 st, float seed) {
+        vec2 i = floor(st);
+        vec2 f = fract(st);
+
+        vec2 u = f*f*(3.0-2.0*f);
+
+        return mix( mix( dot( random2(i + vec2(0.0,0.0), seed ), f - vec2(0.0,0.0) ), 
+                         dot( random2(i + vec2(1.0,0.0), seed ), f - vec2(1.0,0.0) ), u.x),
+                    mix( dot( random2(i + vec2(0.0,1.0), seed ), f - vec2(0.0,1.0) ), 
+                         dot( random2(i + vec2(1.0,1.0), seed ), f - vec2(1.0,1.0) ), u.x), u.y);
+    }
+  // Simplex 2D noise
+  //
+  vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+
+  float snoise(vec2 v){
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+             -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy) );
+    vec2 x0 = v -   i + dot(i, C.xx);
+    vec2 i1;
+    i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod(i, 289.0);
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+    + i.x + vec3(0.0, i1.x, 1.0 ));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
+      dot(x12.zw,x12.zw)), 0.0);
+    m = m*m ;
+    m = m*m ;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
+  
+    vec3 plotCircle(vec2 pos, vec2 uv, float size) {
+      return vec3(smoothstep(size, size + 0.05, length(uv - pos)));
+    }
+  
+    float fbm (in vec2 st, float seed) {
+      // Initial values
+      float value = 0.0;
+      float amplitude = .5;
+      float frequency = 0.;
+      //
+      // Loop of octaves
+      for (int i = octaves; i > 0; i--) {
+          value += amplitude * abs(noise(st, seed));
+          st *= 2.;
+          amplitude *= .5;
+      }
+      return value;
+  }
+    float fbm1(in vec2 _st, float seed) {
+      float v = 0.0;
+      float a = 0.5;
+      vec2 shift = vec2(100.0);
+      // Rotate to reduce axial bias
+      mat2 rot = mat2(cos(0.5), sin(0.5),
+                      -sin(0.5), cos(0.50));
+      for (int i = 0; i < octaves; ++i) {
+          v += a * noise(_st, seed);
+          _st = rot * _st * 2.0 + shift;
+          a *= 0.4;
+      }
+      return v;
+  }
+  
+  float pattern(vec2 uv, float seed, float time, inout vec2 q, inout vec2 r) {
+    
+    q = vec2( fbm1( uv + vec2(0.0,0.0), seed ),
+                   fbm1( uv + vec2(5.2,1.3), seed ) );
+
+    r = vec2( fbm1( uv + 4.0*q + vec2(1.7 - time / 2.,9.2), seed ),
+                   fbm1( uv + 4.0*q + vec2(8.3 - time / 2.,2.8), seed ) );
+
+    vec2 s = vec2( fbm1( uv + 4.0*r + vec2(21.7 - time / 2.,90.2), seed ),
+                   fbm1( uv + 4.0*r + vec2(80.3 - time / 2.,20.8), seed ) );
+
+    vec2 t = vec2( fbm1( uv + 4.0*s + vec2(121.7 - time / 2.,90.2), seed ),
+                   fbm1( uv + 4.0*s + vec2(180.3 - time / 2.,20.8), seed ) );
+    
+    return fbm1( uv + 4.0*t, seed );
+  }
+  
+  vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+  }
+
+    void main() {
+      vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / u_resolution.y;
+      uv *= 1. + dot(uv, uv)* -40.;
+    
+      float time = u_time / 20.;
+      
+
+            uv *= 7.;
+
+      
+      vec2 q = vec2(0.,0.);
+      vec2 r = vec2(0.,0.);
+      
+      vec3 colour = vec3(pattern(uv, seed, u_time / 6., q, r));
+      float QR = clamp(dot(q, r), -1.0, 1.);
+
+      colour += vec3(
+        1., 
+        0., 
+        r.x * r.y + QR * 5.
+      );
+
+      colour = hsv2rgb(colour * 1.5);
+      
+      gl_FragColor = vec4(abs(colour), 1.);
+      gl_FragColor = vec4(-colour + (abs(colour) * .5), 1.);
+      gl_FragColor *= 1.5;
+      gl_FragColor -= clamp(dot(uv, uv) / 100., 0., 5.);
+    }`}, {name: 'Simplex noise', code: `#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+
+// Some useful functions
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+//
+// Description : GLSL 2D simplex noise function
+//      Author : Ian McEwan, Ashima Arts
+//  Maintainer : ijm
+//     Lastmod : 20110822 (ijm)
+//     License :
+//  Copyright (C) 2011 Ashima Arts. All rights reserved.
+//  Distributed under the MIT License. See LICENSE file.
+//  https://github.com/ashima/webgl-noise
+//
+float snoise(vec2 v) {
+
+    // Precompute values for skewed triangular grid
+    const vec4 C = vec4(0.211324865405187,
+                        // (3.0-sqrt(3.0))/6.0
+                        0.366025403784439,
+                        // 0.5*(sqrt(3.0)-1.0)
+                        -0.577350269189626,
+                        // -1.0 + 2.0 * C.x
+                        0.024390243902439);
+                        // 1.0 / 41.0
+
+    // First corner (x0)
+    vec2 i  = floor(v + dot(v, C.yy));
+    vec2 x0 = v - i + dot(i, C.xx);
+
+    // Other two corners (x1, x2)
+    vec2 i1 = vec2(0.0);
+    i1 = (x0.x > x0.y)? vec2(1.0, 0.0):vec2(0.0, 1.0);
+    vec2 x1 = x0.xy + C.xx - i1;
+    vec2 x2 = x0.xy + C.zz;
+
+    // Do some permutations to avoid
+    // truncation effects in permutation
+    i = mod289(i);
+    vec3 p = permute(
+            permute( i.y + vec3(0.0, i1.y, 1.0))
+                + i.x + vec3(0.0, i1.x, 1.0 ));
+
+    vec3 m = max(0.5 - vec3(
+                        dot(x0,x0),
+                        dot(x1,x1),
+                        dot(x2,x2)
+                        ), 0.0);
+
+    m = m*m ;
+    m = m*m ;
+
+    // Gradients:
+    //  41 pts uniformly over a line, mapped onto a diamond
+    //  The ring size 17*17 = 289 is close to a multiple
+    //      of 41 (41*7 = 287)
+
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+
+    // Normalise gradients implicitly by scaling m
+    // Approximation of: m *= inversesqrt(a0*a0 + h*h);
+    m *= 1.79284291400159 - 0.85373472095314 * (a0*a0+h*h);
+
+    // Compute final noise value at P
+    vec3 g = vec3(0.0);
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * vec2(x1.x,x2.x) + h.yz * vec2(x1.y,x2.y);
+    return 130.0 * dot(m, g);
+}
+
+void main() {
+    vec2 st = gl_FragCoord.xy/u_resolution.xy;
+    st.x *= u_resolution.x/u_resolution.y;
+
+    vec3 color = vec3(0.0);
+
+    // Scale the space in order to see the function
+    st *= 10.;
+
+    color = vec3(snoise(st)*.5+.5);
+
+    gl_FragColor = vec4(color,1.0);
+}`}, {name: 'Distance field metaball', code: `// Author @kynd - 2016
+// Title: Distance field metaball
+// http://www.kynd.info
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+
+float smoothen(float d1, float d2) {
+    float k = 1.5;
+    return -log(exp(-k * d1) + exp(-k * d2)) / k;
+}
+void main() {
+    vec2 st = gl_FragCoord.xy/u_resolution.xy;
+    vec2 p0 = vec2(cos(u_time) * 0.3 + 0.5, 0.5);
+    vec2 p1 = vec2(-cos(u_time) * 0.3 + 0.5, 0.5);
+    float d = smoothen(distance(st, p0) * 5.0, distance(st, p1) * 5.0);
+    float ae = 5.0 / u_resolution.y;
+    vec3 color = vec3(smoothstep(0.8, 0.8+ae, d));
+    gl_FragColor = vec4(color, 1.0);
+}`}, {name: 'Gradients', code: `// Author @deadlocked_d - 2020
+// http://meshgradient.com/
+#ifdef GL_ES
+precision mediump float;
+#endif
+#define PI 3.14159265359
+
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+void main()
+{
+ 
+    // colors
+    vec4 color0 = vec4(0.918, 0.824, 0.573, 1.0); // EAD292
+    vec4 color1 = vec4(0.494, 0.694, 0.659, 1.0); // 7EB1A8
+    vec4 color2 = vec4(0.992, 0.671, 0.537, 1.0); // FDAB89
+    vec4 color3 = vec4(0.859, 0.047, 0.212, 1.0); // DB0C36
+ 
+    vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+ 
+    // coordinates
+    vec2 P0 = vec2(0.31,0.3);
+    vec2 P1 = vec2(0.7,0.32);
+    vec2 P2 = vec2(0.28,0.71);
+    vec2 P3 = vec2(0.72,0.75);
+ 
+    vec2 Q = P0 - P2;
+    vec2 R = P1 - P0;
+    vec2 S = R + P2 - P3;
+    vec2 T = P0 - uv;
+ 
+    float u;
+    float t;
+ 
+    if(Q.x == 0.0 && S.x == 0.0) {
+        u = -T.x/R.x;
+        t = (T.y + u*R.y) / (Q.y + u*S.y);
+    } else if(Q.y == 0.0 && S.y == 0.0) {
+        u = -T.y/R.y;
+        t = (T.x + u*R.x) / (Q.x + u*S.x);
+    } else {
+        float A = S.x * R.y - R.x * S.y;
+        float B = S.x * T.y - T.x * S.y + Q.x*R.y - R.x*Q.y;
+        float C = Q.x * T.y - T.x * Q.y;
+        if(abs(A) < 0.0001)
+            u = -C/B;
+        else
+        u = (-B+sqrt(B*B-4.0*A*C))/(2.0*A);
+        t = (T.y + u*R.y) / (Q.y + u*S.y);
+    }
+    u = clamp(u,0.0,1.0);
+    t = clamp(t,0.0,1.0);
+ 
+
+    t = smoothstep(0.0, 1.0, t);
+    u = smoothstep(0.0, 1.0, u);
+ 
+    vec4 colorA = mix(color0,color1,u);
+    vec4 colorB = mix(color2,color3,u);
+    gl_FragColor = mix(colorA, colorB, t);
+}`}, {name: 'Field distance shapes', code: `// Author @kynd - 2016
+// Title: Distance Field Shapes 
+// http://www.kynd.info
+
+#ifdef GL_ES
+precision mediump float;
+#endif
+
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+uniform float u_time;
+
+float smoothedge(float v) {
+    return smoothstep(0.0, 1.0 / u_resolution.x, v);
+}
+
+float circle(vec2 p, float radius) {
+  return length(p) - radius;
+}
+
+float rect(vec2 p, vec2 size) {  
+  vec2 d = abs(p) - size;
+  return min(max(d.x, d.y), 0.0) + length(max(d,0.0));
+}
+
+float roundRect(vec2 p, vec2 size, float radius) {
+  vec2 d = abs(p) - size;
+  return min(max(d.x, d.y), 0.0) + length(max(d,0.0))- radius;
+}
+
+float ring(vec2 p, float radius, float width) {
+  return abs(length(p) - radius * 0.5) - width;
+}
+
+float hexagon(vec2 p, float radius) {
+    vec2 q = abs(p);
+    return max(abs(q.y), q.x * 0.866025 + q.y * 0.5) - radius;
+}
+
+float triangle(vec2 p, float size) {
+    vec2 q = abs(p);
+    return max(q.x * 0.866025 + p.y * 0.5, -p.y * 0.5) - size * 0.5;
+}
+
+float ellipse(vec2 p, vec2 r, float s) {
+    return (length(p / r) - s);
+}
+
+float capsule(vec2 p, vec2 a, vec2 b, float r) {
+    vec2 pa = p - a, ba = b - a;
+    float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+    return length( pa - ba*h ) - r;
+}
+
+//http://thndl.com/square-shaped-shaders.html
+float polygon(vec2 p, int vertices, float size) {
+    float a = atan(p.x, p.y) + 0.2;
+    float b = 6.28319 / float(vertices);
+    return cos(floor(0.5 + a / b) * b - a) * length(p) - size;
+}
+
+void main() {
+    vec2 st = gl_FragCoord.xy/u_resolution.xy;
+
+    float d = circle(st - vec2(0.2), 0.1);
+    d = min(d, rect(st - vec2(0.5, 0.2), vec2(0.1, 0.08)));
+    d = min(d, roundRect(st - vec2(0.8, 0.2), vec2(0.08, 0.06), 0.02));
+    d = min(d, ring(st - vec2(0.2, 0.5), 0.18, 0.02));
+    d = min(d, hexagon(st - vec2(0.5, 0.5), 0.1));
+    d = min(d, triangle(st - vec2(0.8, 0.5), 0.1));
+    d = min(d, ellipse(st - vec2(0.2, 0.8), vec2(0.9, 1.2), 0.1));
+    d = min(d, capsule(st - vec2(0.5, 0.8), vec2(-0.05, -0.05), vec2(0.05, 0.05), 0.05));
+    d = min(d, polygon(st - vec2(0.8, 0.8), 5, 0.1));
+    vec3 color = vec3(smoothedge(d));
+    gl_FragColor = vec4(color, 1.0);
+}`}, {name: 'Line', code: `#ifdef GL_ES
 precision mediump float;
 #endif
 
@@ -145,9 +719,9 @@ void main(){
   }`}]
 const code = JSON.parse(localStorage.getItem('glslEditor-last-content'));
 shaders.forEach(shader => {
-  // if (!code[shader.name]) {
+  if (!code[shader.name]) {
     code[shader.name] = shader.code;
-  // }
+  }
 })
 console.log(code)
 localStorage.setItem('glslEditor-last-content', JSON.stringify(code));
