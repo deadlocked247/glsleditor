@@ -1,0 +1,26 @@
+<head>
+  <title>GLSL Editor</title>
+  <link type="text/css" rel="stylesheet" href="glslEditor.css">
+<script type="application/javascript" src="glslEditor.js"></script>
+</head>
+<style>
+  body {
+    padding: 0;
+    margin: 0;
+
+  }
+  </style>
+<body>
+  <div id="glsl_editor"></div>
+</body>
+<script type="text/javascript">
+  const glslEditor = new GlslEditor('#glsl_editor', { 
+      canvas_size: 500,
+      canvas_draggable: true,
+      theme: 'monokai',
+      multipleBuffers: true,
+      watchHash: true,
+      fileDrops: true,
+      menu: true
+  });
+</script>
